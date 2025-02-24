@@ -1,26 +1,63 @@
 #include <esp32_can.h>  // https://github.com/collin80/esp32_can and https://github.com/collin80/can_common CAN libraries
 #include <esp32_obd2.h>
+
 #define BAUD_RATE 19200
+
 #define RXD2 16
 #define TXD2 17
 #define CAN_RX_PIN  13
 #define CAN_TX_PIN  14
-   int PFCSTARTED = 0; // begin obd only once
 ///////////// QATIF SPEED FACTORY 
-//////////// SALEH.M  
+//////////// SALEH.M IBRAHIM 
 ///////////// APEXI POWER FC ARDUINO SERIAL ADAPTER 
+int  RPM_OBDDATA;
+  int   SPEED_OBD;
+   int  MAP_OBD;
+  int  IAT_OBD;
+  int  CLT_OBD;
+  int  LOAD_OBD;
+  int BATT_OBD;
+  int TIMING_OBD;
+  int DisplayBatt;
 
 // Define command and response arrays
 const byte startcmd[] = {0xF9, 0x02, 0x04};
-const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC};
+
+ //const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC}; //START RESPOND WITHOUT HACKS
+
+///////////// HACKED BYPASS ENGINE NAME 
+//const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x46, 0x46,  0x36, 0x41,0x2D,0x54,0x20,0x20,  0x20}; //F6A
+
+
+//const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x46, 0x52,  0x58,0x2D,0x37,0x20,0x20,0x20,  0x20}; //F6A
+/////////////////                                                         R      X      
+const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x53,  0x53, 0x52, 0x32, 0x30, 0x56,0x54, 0x2D, 0x44}; //SR20VT
+                                                                  ////    S      R     2     0     T    1     - 
+   
+
+
+//const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC ,    0xF3, 0x0A, 0x31, 0x33, 0x42, 0x2D, 0x52,0x45, 0x57, 0x20, 0x21 }; //13B
+
+
+///0x52,0x55,0x53,0x20,////////// R U S (SPACE)   
+//0x20,0x45,0x46,0x49, // E F I 
+//const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x52, 0x52,  0x55, 0x53,0x45,0x46,0x49,0x20,  0x20}; ///////// RUSEFI
+//const byte startrspnd[] =   {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x51,0x51, 0x41, 0x54, 0x49,0x46,0x20,0x20,0x20};  /////////qatif
+//const byte startrspnd[] =   {0xF9, 0x03, 0x07, 0xFC};  /////////start res
+//const byte startrspnd[] = {0xF9, 0x03, 0x07, 0xFC,     0xF3, 0x0A,0x48,0x48, 0x41, 0x4C, 0x54,0x45,0x43,0x48,0x48};  /////////HALTECH
+////////// 48 41 4C 54 45 43 48 HALTECH
+
 
 const byte enginename[] = {0xF3, 0x02, 0x0A};
 //const byte enginenamer[] = {0xF3, 0x0A, 0x51, 0x41, 0x54, 0x49, 0x46, 0xEE, 0xEE, 0xEE, 0xD5}; //QATIF
 //F3 0a 32 4A 5A 2D 47 54 45 31 EE 2JZGTE 
-//const byte enginenamer[] =   {0xF3, 0x0A, 0x46, 0x36, 0x41, 0x54, 0x20,0x20, 0x20,0x20,0xD5}; //F6A
+const byte enginenamer[] =   {0x20, 0x20,0x20 ,0x20 ,0x20,0x20,0x20, 0x20, 0x20, 0x20,0x20}; //empty
+//const byte enginenamer[] =   {0xF3, 0x0A,0x51,0x51, 0x41, 0x54, 0x49,0x46,0x20,0x20,0x20}; //Qatif
+
+    
 //const byte enginenamer[] = {0xF3, 0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,0xFF, 0xFF, 0xFF, 0xD5}; //FFFF
 
-const byte enginenamer[] = {0xF3, 0x0A, 0x52, 0x42, 0x32, 0x36, 0x44,0x45, 0x54, 0x54, 0xD5}; //RB26 WORKING
+//const byte enginenamer[] = {0xF3, 0x0A, 0x52, 0x42, 0x32, 0x36, 0x44,0x45, 0x54, 0x54, 0xD5}; //RB26 WORKING
 //const byte enginenamer[] = {0xF3, 0x0A, 0x20, 0x33, 0x53, 0x2D, 0x47,0x45, 0x20, 0x20, 0x63}; //3S-GE WORKING
 // static byte enginenamer[] = {0xF3, 0x0A,0x31, 0x4A, 0x5A, 0x2D, 0x47,0x54, 0x45, 0xE2 } ; //1JZGTE
 
@@ -89,13 +126,32 @@ const byte AIRFLOWREPLY[] = {
 
 
 const byte menuboot[] = {0xD7, 0x02, 0x26};
-const byte menubootr[] = {0xD7, 0x14, 0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x04, 0x00, 0x01, 0xEC};
+const byte menubootr[] = {0xD7, 0x14, 0x00, 0x00,0x02,0x00,0x01,0x02,0x03,0x04,0x03,0x02,0x01,0x08,0x07,0x05,0x06,0x03,0x13,0x01,0xD1};
 
 const byte menudata[] = {0xCA, 0x02, 0x33};
 
-const byte menudata_full[] = {0xCA, 0x52, 0x00, 0x00, 0xCD, 0x05, 0xB3, 0x08, 0x99, 0x0B, 0x7F, 0x0E, 0x66, 0x11, 0x4C, 0x14, 0x32, 0x17, 0x19, 0x1A, 0xFF, 0x1C, 0xCC, 0x22, 0x98, 0x28, 0x65, 0x2E, 0xFE, 0x39, 0x97, 0x45, 0x30, 0x51, 0xCA, 0x5C, 0x63, 0x68, 0xFC, 0x73, 0x2E, 0x8B, 0x20, 0x03, 0xB0, 0x04, 0x40, 0x06, 0xD0, 0x07, 0x60, 0x09, 0xF0, 0x0A, 0x80, 0x0C, 0x10, 0x0E, 0xA0, 0x0F, 0x30, 0x11, 0xC0, 0x12, 0x50, 0x14, 0xE0, 0x15, 0x00, 0x19, 0x90, 0x1A, 0x20, 0x1C, 0x40, 0x1F, 0xD0, 0x20, 0x60, 0x22, 0xF0, 0x23, 0xCA};
+
+const byte menudata_half[] =  {0xCA,0x52,0x00,0x00,0xCD,0x05,0xB3,0x08,0x99,0x0B,0x7F,0x0E,0x66,0x11,0x4C,0x14,0x32,0x17,0x19,0x1A,0xFF,0x1C,0xCC,0x22,0x98,0x28,0x65,0x2E,0xFE,0x39,0x97,0x45,0x30,0x51,0xCA,0x5C,0x63,0x68};
+
+
+//const byte menudata_full[] =  {0xCA, 0x52, 0x00, 0x00, 0xCD, 0x05, 0xB3, 0x08, 0x99, 0x0B, 0x7F, 0x0E, 0x66, 
+//0x11, 0x4C, 0x14, 0x32, 0x17, 0x19, 0x1A, 0xFF, 0x1C, 0xCC, 0x22, 0x98, 0x28, 0x65, 0x2E, 0xFE, 0x39, 0x97,
+// 0x45, 0x30, 0x51, 0xCA, 0x5C, 0x63, 0x68, 0xFC, 0x73, 0x2E, 0x8B, 0x20, 0x03, 0xB0, 0x04, 0x40, 0x06, 0xD0, 
+// 0x07, 0x60, 0x09, 0xF0, 0x0A, 0x80, 0x0C, 0x10, 0x0E, 0xA0, 0x0F, 0x30, 0x11, 0xC0, 0x12, 0x50, 0x14, 0xE0,
+  //0x15, 0x00, 0x19, 0x90, 0x1A, 0x20, 0x1C, 0x40, 0x1F, 0xD0, 0x20, 0x60, 0x22, 0xF0, 0x23, 0xCA};
+
+
+
+const byte menudata_full[] = {0xCA,0x52,0x00,0x00,0xCD,0x05,0xB3,0x08,0x99,0x0B,0x7F,0x0E,0x66,0x11,0x4C,0x14,0x32
+,0x17,0x19,0x1A,0xFF,0x1C,0xCC,0x22,0x98,0x28,0x65,0x2E,0xFE,0x39,0x97,0x45,0x30,0x51,0xCA,0x5C,0x63,0x68,0xFC,0x73,
+0x2E,0x8B,0x20,0x03,0xB0,0x04,0x40,0x06,0xD0,0x07,0x60,0x09,0xF0,0x0A,0x80,0x0C,0x10,0x0E,0xA0,0x0F,0x30,0x11,0xC0,0x12
+,0x50,0x14,0xE0,0x15,0x00,0x19,0x90,0x1A,0x20,0x1C,0x40,0x1F,0xD0,0x20,0x60,0x22,0xF0,0x23,0xCA};
+
 
 const byte monitorreqr[] = {0xF2, 0x02, 0x0B};
+
+
+
 
 const byte tracer[] = {0xDB, 0x02, 0x22};
 
@@ -264,62 +320,157 @@ const byte MAPINJ_DATA4_RSP[] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //100
 ,0x8E //////// sector end 
 };
-
+ byte DATAREPLY [23];
+int DATAREQUEST=0;
+   int PFCSTARTED = 0; // begin obd only once
 bool start=false;
+
+
+byte buffer[21];
+int bufferIndex = 0;
+
+
 void sendResponse(const byte *response, size_t responseSize);
+
+
+
+
+
+byte* menubootrr; // Global variable to hold the saved sequence
+
+
 void setup() {
  
-  CAN0.setCANPins((gpio_num_t)CAN_RX_PIN, (gpio_num_t)CAN_TX_PIN);
+
+
+
+ 
+
  Serial2.begin(BAUD_RATE, SERIAL_8E1, RXD2, TXD2);    //serial 2
 
+
+ while (start==true) {
+  if (!OBD2.begin()) {
+  }
+  else {
+
+ }
 }
-  static byte commandBuffer[3]; // BFR
+
+
+
+  CAN0.setCANPins((gpio_num_t)CAN_RX_PIN, (gpio_num_t)CAN_TX_PIN);
+
+
+
+}
+
+  static byte commandBuffer[105]; // BFR
   static int commandIndex = 0; // BFFR
+
+
+
+   int correctedtemp;
+ int correctedtempIAT;
+
+
+
+
+ //Serial.print(correctedtemp);
+int menucounter=0;
+int   menubootcomplete=0;
+    int sentloop = 0;
+    int   othercommandok =0;
+
+
+
+
+
 
 void loop() {
 
 
- 
-       while (PFCSTARTED==1){
+const float offset = 80.0; // Offset to map -80 degrees to 0x00,0x00
+const float scalingFactor = 1.0; // Scaling factor to be determined based on your fixed-point format
+float adjustedValue = CLT_OBD + offset;
+float adjustedValueIAT = IAT_OBD + offset;
+  correctedtemp = adjustedValue * scalingFactor;
+ correctedtempIAT = adjustedValueIAT * scalingFactor; 
+
+
+
+
+
+  if (Serial2.available() > 0) {
+
+
+
+    byte currentByte = Serial2.read(); 
+   
+
+   
+   
+    if (currentByte == DATAREQ[0] || currentByte == startcmd[0]  || currentByte == enginename[0]|| currentByte == ver[0] ||  currentByte == menuboot[0] || currentByte == menudata[0] 
+    || currentByte == tracer[0] ||currentByte == MAP_DATA_REQ1[0] ||currentByte == MAP_DATA_REQ2[0] ||currentByte == MAP_DATA_REQ3[0] ||currentByte == MAP_DATA_REQ4[0] 
+    ||  currentByte == MAPINJ_DATA_REQ1[0] ||  currentByte == MAPINJ_DATA_REQ2[0] ||  currentByte == MAPINJ_DATA_REQ3[0]     ||  currentByte == MAPINJ_DATA_REQ4[0] 
+      ||  currentByte == MONREQ[0] ||currentByte == FUNREQ[0] ||  currentByte == SELECTREQ[0] ||  currentByte == AIRFLOWMENU[0] ||  currentByte == INJECTORADJUST[0] ||  currentByte == SENSORCHK[0] 
+    ||  currentByte == FUNCTIONCMD[0] ||  currentByte == BOOSTSETTING[0]||  currentByte == WATER[0] ||  currentByte == ACCEL[0]||  currentByte == REVLIMIT[0]||  currentByte == CRANKING[0] ||  currentByte == verunknown[0]       )  {
+      // Start of a potential command sequence
     
-    OBD2.begin();
+    
+      commandBuffer[0] = currentByte;
+      commandIndex = 1;
+    
+    } else if (commandIndex > 0) {
+      commandBuffer[commandIndex] = currentByte;
+      commandIndex++;
+
+
+
+
+      if (commandIndex == 3) {
+       
+       
+
+
+   
+  
+ 
+       
+        if (commandBuffer[0] == DATAREQ[0] &&  commandBuffer[1] == DATAREQ[1]&&   commandBuffer[2] == DATAREQ[2]) {
+
+           
+
+
+
+             if (PFCSTARTED==0){
+PFCSTARTED=1;
+if (!OBD2.begin()) {
+  }
+  else {
+  }
+
+
+}
+
+
+
+
+
+ 
+   
+
   //Serial.print(OBD2.pidName(ENGINE_COOLANT_TEMPERATURE));
   //Serial.print(" = ");
   //Serial.print(OBD2.pidRead(ENGINE_COOLANT_TEMPERATURE));
   //Serial.print(OBD2.pidUnits(ENGINE_COOLANT_TEMPERATURE));
 
-  int  RPM_OBDDATA = OBD2.pidRead(ENGINE_RPM);
-  int  SPEED_OBD = OBD2.pidRead(VEHICLE_SPEED);
-  int  MAP_OBD = OBD2.pidRead(INTAKE_MANIFOLD_ABSOLUTE_PRESSURE);
-  int  IAT_OBD = OBD2.pidRead(AIR_INTAKE_TEMPERATURE);
-  int  CLT_OBD = (OBD2.pidRead(ENGINE_COOLANT_TEMPERATURE));
-  int  LOAD_OBD = OBD2.pidRead(CALCULATED_ENGINE_LOAD);
-  int BATT_OBD = OBD2.pidRead(CONTROL_MODULE_VOLTAGE);
-  int TIMING_OBD = OBD2.pidRead(TIMING_ADVANCE);
-  int DisplayBatt=0;
-
-if (RPM_OBDDATA < 1){
-
- RPM_OBDDATA=0;
-}else{
-  RPM_OBDDATA=OBD2.pidRead(ENGINE_RPM);
-}
-
- int correctedtemp ;
- int correctedtempIAT ;
-const float offset = 80.0; // Offset to map -80 degrees to 0x00,0x00
-const float scalingFactor = 1.0; // Scaling factor to be determined based on your fixed-point format
-float adjustedValue = CLT_OBD + offset;
-float adjustedValueIAT = IAT_OBD + offset;
-  
-  correctedtemp = adjustedValue * scalingFactor;
- correctedtempIAT = adjustedValueIAT * scalingFactor;
 
 
- //Serial.print(correctedtemp);
+
 
   ////// BATT
-  byte LASTHEXBATT = (DisplayBatt >> 8) & 0xFF; //  (0x01)
+   byte LASTHEXBATT = (DisplayBatt >> 8) & 0xFF; //  (0x01)
   byte FIRSTHEXBATT = DisplayBatt & 0xFF;         //  (0x39)
 /////////// RPM 
   byte LASTHEXRPM = (RPM_OBDDATA >> 8) & 0xFF; //  (0x01)
@@ -332,9 +483,9 @@ float adjustedValueIAT = IAT_OBD + offset;
   byte FIAT = correctedtempIAT & 0xFF;         //  (0x39)
   /////////// MAP 
   byte LMAP= (MAP_OBD >> 8) & 0xFF; //  (0x01)
-  byte FMAP = MAP_OBD & 0xFF;         //  (0x39)
+ byte  FMAP = MAP_OBD & 0xFF;         //  (0x39)
     /////////// SPEED 
-  byte LSPD= (SPEED_OBD >> 8) & 0xFF; //  (0x01)
+   byte LSPD= (SPEED_OBD >> 8) & 0xFF; //  (0x01)
   byte FSPD = SPEED_OBD & 0xFF;         //  (0x39)
       /////////// LOAD 
   byte LLOAD = (LOAD_OBD >> 8) & 0xFF; //  (0x01)
@@ -344,105 +495,135 @@ float adjustedValueIAT = IAT_OBD + offset;
   byte FTIME = TIMING_OBD & 0xFF;         //  (0x39)
 
 
-    
-    
-      byte DATAREPLY[] =    {0xDA,0x16 ,FLOAD , LLOAD   ,FTIME,LTIME   ,FMAP,LMAP   ,FIRSTHEXRPM,LASTHEXRPM    ,FSPD,LSPD,    0x00,0x00  ,  0x00,0x00  ,FCLT,LCLT  ,FIAT,LIAT, FIRSTHEXBATT,LASTHEXBATT ,0x00};// DONT TOUCH SECOND DEG 
-     sendResponse(DATAREPLY, sizeof(DATAREPLY));
-    }
+  RPM_OBDDATA = OBD2.pidRead(ENGINE_RPM);
+     SPEED_OBD = OBD2.pidRead(VEHICLE_SPEED);
+     MAP_OBD = OBD2.pidRead(INTAKE_MANIFOLD_ABSOLUTE_PRESSURE);
+    IAT_OBD = OBD2.pidRead(AIR_INTAKE_TEMPERATURE);
+    CLT_OBD = (OBD2.pidRead(ENGINE_COOLANT_TEMPERATURE));
+    LOAD_OBD = OBD2.pidRead(CALCULATED_ENGINE_LOAD);
+   BATT_OBD = OBD2.pidRead(CONTROL_MODULE_VOLTAGE);
+   TIMING_OBD = OBD2.pidRead(TIMING_ADVANCE);
+   if (RPM_OBDDATA < 1){
+
+ RPM_OBDDATA=0;
+}else{
+  RPM_OBDDATA=OBD2.pidRead(ENGINE_RPM);
+}
+
+   
+
+   DisplayBatt=0;
+
 
  
-  if (Serial2.available() > 0) {
-
-   
-   
-  
-   
-   
-             if (commandBuffer[0] == DATAREQ[0] && commandBuffer[1] == DATAREQ[1] && commandBuffer[2] == DATAREQ[2]) {
-
-if (PFCSTARTED==0){
-PFCSTARTED=1; 
-}
 
 
  // Serial.println();                                                                                             ///// BOOST 1.12 BAR = (0x70,0x80)
 /// PID NOTES VEHICLE_SPEED (SPEED)  TIMING_ADVANCE INTAKE_MANIFOLD_ABSOLUTE_PRESSURE  AIR_INTAKE_TEMPERATURE ENGINE_COOLANT_TEMPERATURE ABSOLUTE_LOAD_VALUE CONTROL_MODULE_VOLTAGE
 //------------------------CMD  CMD     INJDTY      IGN TIMING    MAP/MAF     RPM SPEED                 SPEED 255KM    BOOSTPRES 1BAR    KNOCK   WATER TEMP AIR TEMP     BATT VOLT
-
-         
+           ///  1     2      3      4       5       6      7    8        9          10             11     12      13   14       15   16     17   18    19   20      21           22           23
+byte DATAREPLY [23]={0xDA,0x16 ,FLOAD , LLOAD   ,FTIME,LTIME   ,FMAP,LMAP   ,FIRSTHEXRPM,LASTHEXRPM    ,FSPD,LSPD,    0x00,0x00  ,  0x00,0x00  ,FCLT,LCLT  ,FIAT,LIAT, FIRSTHEXBATT,LASTHEXBATT ,0x00};// DONT TOUCH SECOND DEG 
+   
+     sendResponse(DATAREPLY, sizeof(DATAREPLY));
+         DATAREQUEST =1;
           commandIndex = 0;
+           
               }
-   
-   
-   
-   
-    byte currentByte = Serial2.read(); 
-   // Check for command sequences
-    if (currentByte == startcmd[0]  || currentByte == enginename[0]|| currentByte == ver[0] ||  currentByte == menuboot[0] || currentByte == menudata[0] 
-    || currentByte == tracer[0] ||currentByte == MAP_DATA_REQ1[0] ||currentByte == MAP_DATA_REQ2[0] ||currentByte == MAP_DATA_REQ3[0] ||currentByte == MAP_DATA_REQ4[0] 
-    ||  currentByte == MAPINJ_DATA_REQ1[0] ||  currentByte == MAPINJ_DATA_REQ2[0] ||  currentByte == MAPINJ_DATA_REQ3[0]     ||  currentByte == MAPINJ_DATA_REQ4[0] 
-    || currentByte == DATAREQ[0]   ||  currentByte == MONREQ[0] ||currentByte == FUNREQ[0] ||  currentByte == SELECTREQ[0] ||  currentByte == AIRFLOWMENU[0] ||  currentByte == INJECTORADJUST[0] ||  currentByte == SENSORCHK[0] 
-    ||  currentByte == FUNCTIONCMD[0] ||  currentByte == BOOSTSETTING[0]||  currentByte == WATER[0] ||  currentByte == ACCEL[0]||  currentByte == REVLIMIT[0]||  currentByte == CRANKING[0] ||  currentByte == verunknown[0]       )  {
-      // Start of a potential command sequence
-    
-    
-      commandBuffer[0] = currentByte;
-      commandIndex = 1;
-    PFCSTARTED =0;
-    
-    } else if (commandIndex > 0) {
-      commandBuffer[commandIndex] = currentByte;
-      commandIndex++;
-
-      if (commandIndex == 3) {
-        // Check for START REQ
-     
-         if (commandBuffer[0] == ver[0] && commandBuffer[1] == ver[1] && commandBuffer[2] == ver[2]) {
-          sendResponse(verr, sizeof(verr));
-          commandIndex = 0;
-        }
-              if (commandBuffer[0] == verunknown[0] && commandBuffer[1] == verunknown[1] && commandBuffer[2] == verunknown[2]) {
-          sendResponse(verunknown, sizeof(verunknown));
-          commandIndex = 0;
-        }
        
+       
+       
+       
+       
+       
+       
+        // Check for START REQ
+      
+
+      ///////// HACKED ENGINE NAME DISPLAY 
+         if (commandBuffer[0] == ver[0] && commandBuffer[1] == ver[1] && commandBuffer[2] == ver[2]) {
+         sendResponse(verr, sizeof(verr));
+         commandIndex = 0;
+        }
+           if (commandBuffer[0] == verunknown[0] && commandBuffer[1] == verunknown[1] && commandBuffer[2] == verunknown[2]) {
+          sendResponse(verunknown, sizeof(verunknown));
+        commandIndex = 0;
+        }
                // ENGINE NAME
-       if (commandBuffer[0] == enginename[0] && commandBuffer[1] == enginename[1] && commandBuffer[2] == enginename[2]) {
-          
-              sendResponse(enginenamer, sizeof(enginenamer));
-          commandIndex = 0;
+      if (commandBuffer[0] == enginename[0] && commandBuffer[1] == enginename[1] && commandBuffer[2] == enginename[2]) {
+             sendResponse(enginenamer, sizeof(enginenamer));
+        commandIndex = 0;
       }
-         if (commandBuffer[0] == startcmd[0] && commandBuffer[1] == startcmd[1] && commandBuffer[2] == startcmd[2]) {
-          sendResponse(startrspnd, sizeof(startrspnd));
+      if (commandBuffer[0] == startcmd[0] && commandBuffer[1] == startcmd[1] && commandBuffer[2] == startcmd[2]) {
+        sendResponse(startrspnd, sizeof(startrspnd));
+          commandIndex = 0;
+       }
+
+        
+        
+         if (commandBuffer[0] == menuboot[0] && commandBuffer[1] == menuboot[1] && commandBuffer[2] == menuboot[2]) {
+          sendResponse(menubootr, sizeof(menubootr));
+          menubootcomplete=1;
+              othercommandok =1;
           commandIndex = 0;
         }
-               if (commandBuffer[0] == FUNCTIONCMD[0] && commandBuffer[1] == FUNCTIONCMD[1] && commandBuffer[2] == FUNCTIONCMD[2]) {
+                
+                    if (commandBuffer[0] == FUNCTIONCMD[0] && commandBuffer[1] == FUNCTIONCMD[1] && commandBuffer[2] == FUNCTIONCMD[2]) {
           sendResponse(FUNCTIONR, sizeof(FUNCTIONR));
           commandIndex = 0;
         }
-
-         if (commandIndex == 3) {
-         if (commandBuffer[0] == menuboot[0] && commandBuffer[1] == menuboot[1] && commandBuffer[2] == menuboot[2]) {
-          
-          sendResponse(menubootr, sizeof(menubootr));
-          commandIndex = 0;
-        }
-       
-          if (commandBuffer[0] == SENSREQ[0] && commandBuffer[1] == SENSREQ[1] && commandBuffer[2] == SENSREQ[2]) {
-          sendResponse(SENSREPLY, sizeof(SENSREPLY));
-          commandIndex = 0;
-              }
-         else if (commandBuffer[0] == SENSORCHK[0] && commandBuffer[1] == SENSORCHK[1] && commandBuffer[2] == SENSORCHK[2]) {
+     
+      if (commandBuffer[0] == SENSORCHK[0] && commandBuffer[1] == SENSORCHK[1] && commandBuffer[2] == SENSORCHK[2]) {
           sendResponse(SENSORCHKr, sizeof(SENSORCHKr));
           commandIndex = 0;
               }    
         // MENU DATA
-        else if (commandBuffer[0] == menudata[0] && commandBuffer[1] == menudata[1] && commandBuffer[2] == menudata[2]) {
-          sendResponse(menudata, sizeof(menudata));
-          commandIndex = 0;
+     
+     else if (commandBuffer[0] == menudata[0] && commandBuffer[1] == menudata[1] && commandBuffer[2] == menudata[2]) {
+         menucounter=0;
+
+       if (menucounter==0){
+          sendResponse(menudata_half, sizeof(menudata_half));
+        
+                menucounter=1;
+       }
+      
+      if (menucounter==1){
+       sendResponse(menudata_full, sizeof(menudata_full));
+         start=true; 
         }
+       
+       
+       
+            if (commandBuffer[0] == SENSREQ[0] && commandBuffer[1] == SENSREQ[1] && commandBuffer[2] == SENSREQ[2]) {
+          sendResponse(SENSREPLY, sizeof(SENSREPLY));
+          commandIndex = 0;
+              }
+       
+       
+       }    else if (commandBuffer[0] =! menudata[0]  &&  commandBuffer[1] == MONREQ[1] &&  commandBuffer[2] != menudata[2]  
+
+
+
+      && commandIndex == 3||6||12 && menucounter==1  )  {
+    start=true; 
+   
+  
+        sendResponse(monitorreqr, sizeof(monitorreqr));
+
+
+
+
+
         // TRACER
-        else if (commandBuffer[0] == tracer[0] && commandBuffer[1] == tracer[1] && commandBuffer[2] == tracer[2]) {
+      
+
+      
+
+    
+
+
+      
+       } else if (commandBuffer[0] == tracer[0] && commandBuffer[1] == tracer[1] && commandBuffer[2] == tracer[2]) {
     int  RPM_OBDDATA = OBD2.pidRead(ENGINE_RPM);
   int  MAP_OBD = OBD2.pidRead(INTAKE_MANIFOLD_ABSOLUTE_PRESSURE);
     byte LASTHEXRPM = (RPM_OBDDATA >> 8) & 0xFF; //  (0x01)
@@ -520,24 +701,22 @@ PFCSTARTED=1;
           sendResponse(MAPINJ_DATA4_RSP, sizeof(MAPINJ_DATA4_RSP));
           commandIndex = 0;
         }
- 
-  if (commandBuffer[0] == FUNREQ[0] && commandBuffer[1] == FUNREQ[1]  && commandIndex == 21||42||63||84||105 ) {
-        sendResponse(monitorreqr, sizeof(monitorreqr));
-        commandIndex = 0; 
+     else if (commandBuffer[0] == FUNREQ[0] && commandBuffer[1] == FUNREQ[1]   && commandIndex == 21||42||63||84||105  && othercommandok ==1) {
+       sendResponse(monitorreqr, sizeof(monitorreqr));
+      commandIndex = 0; 
       }
-    if (commandBuffer[0] == MONREQ[0] && commandBuffer[1] == MONREQ[1]  && commandIndex == 21||42||63||84||105 )  {
-    start=true;
+      else  if (commandBuffer[0] == SELECTREQ[0] && commandBuffer[1] == SELECTREQ[1]   && commandIndex == 21||42||63||84||105 &&  othercommandok ==1) {
         sendResponse(monitorreqr, sizeof(monitorreqr));
+       commandIndex = 0; 
+     }
 
-        commandIndex = 0; 
-      }
-        if (commandBuffer[0] == SELECTREQ[0] && commandBuffer[1] == SELECTREQ[1]  && commandIndex == 21||42||63||84||105 ) {
-        sendResponse(monitorreqr, sizeof(monitorreqr));
-        commandIndex = 0; 
-      }
 
-    
-    }
+
+
+
+
+
+
 
 
 }
@@ -546,6 +725,9 @@ PFCSTARTED=1;
 }
 void sendResponse(const byte *response, size_t responseSize) {
   for (size_t i = 0; i < responseSize; i++) {
+
     Serial2.write(response[i]);
+ 
+    DATAREQUEST=0;
   }
 }
